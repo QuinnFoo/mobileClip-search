@@ -1,98 +1,146 @@
-# QF_Clip 图像检索系统
+#mobileClip-Search: Image Search Application
 
-这是一个基于MobileCLIP模型的图像检索系统，可以通过文本或图片来检索相似的图片。
+An image search application based on Apple's mobileClip-Search model, supporting both text-to-image and image-to-image search capabilities.
 
-## 功能特点
+## Features
 
-- 支持使用文本描述检索相似图片
-- 支持使用图片检索相似图片
-- 本地图片库管理和检索
-- 高效的向量索引和检索
+- Text-to-image search
+- Image-to-image similarity search
+- Support for both local and AWS S3 storage
+- Docker containerization
+- AWS EC2 cloud deployment
+- Real-time image processing and search
+- Efficient vector indexing with FAISS
 
-## 目录结构
+## Tech Stack
 
-```
-QF_Clip/
-├── checkpoints/        # 模型文件目录
-│   └── mobileclip_s0.pt
-├── docs/              # 文档和测试图片
-├── images/            # 图片库目录
-└── notebook/          # Jupyter notebooks
-    └── clip_demo.ipynb
-```
+- **Backend**: Flask
+- **Deep Learning**: PyTorch
+- **Model**: Apple mobileClip-Search
+- **Vector Search**: FAISS
+- **Deployment**: Docker, AWS EC2
+- **Storage**: Local filesystem / AWS S3
+- **Web Server**: Gunicorn
 
-## 环境要求
+## Quick Start
 
-- Python 3.10+
-- PyTorch
-- MobileCLIP
-- FAISS
-- Pillow
-- NumPy
-- Matplotlib
+### Local Development
 
-## 使用说明
-
-1. 准备环境：
-   ```bash
-   pip install torch torchvision faiss-cpu pillow numpy matplotlib tqdm
-   ```
-
-2. 下载MobileCLIP模型：
-   - 从官方仓库下载模型文件：https://github.com/apple/ml-mobileclip
-   - 将模型文件放置在 `checkpoints` 目录下
-
-3. 准备图片库：
-   - 将需要建立索引的图片放入 `images` 目录
-   - 支持的图片格式：jpg, jpeg, png
-
-4. 运行演示notebook：
-   - 打开 `notebook/clip_demo.ipynb`
-   - 按照notebook中的说明逐步执行
-
-## 主要功能说明
-
-### 1. 图片库建立
-```python
-# 初始化图片库
-image_library = ImageLibrary()
-
-# 构建图片库索引
-build_image_library("path/to/image/directory")
+1. Clone the repository and install dependencies:
+```bash
+git clone [your-repository-url]
+cd mobileClip-Search
+pip install -r requirements.txt
 ```
 
-### 2. 文本检索
-```python
-# 使用文本检索图片
-query_text = "a cat"
-results = image_library.search(process_text(query_text))
+2. Download the model:
+```bash
+mkdir -p checkpoints
+# Download mobileclip_s0.pt to the checkpoints directory
 ```
 
-### 3. 图片检索
-```python
-# 使用图片检索相似图片
-query_image_path = "path/to/query/image.jpg"
-results = image_library.search(process_image(query_image_path))
+3. Configure environment variables:
+```bash
+cp .env.example .env
+# Edit .env file with your configuration
 ```
 
-## 注意事项
+4. Run the application:
+```bash
+python app.py
+```
 
-1. 图片处理：
-   - 所有图片会被自动转换为RGB格式
-   - 建议使用清晰的图片以获得更好的检索效果
+### Docker Deployment
 
-2. 性能优化：
-   - 使用FAISS进行高效的向量检索
-   - 图片特征向量会被缓存以提高检索速度
+1. Build and run with Docker:
+```bash
+docker-compose up --build
+```
 
-3. 内存使用：
-   - 图片库大小会影响内存使用
-   - 建议根据实际需求调整检索结果数量
+### AWS Deployment
 
-## 后续开发计划
+1. Prepare AWS environment:
+   - Create an EC2 instance
+   - Configure security group (open port 80)
+   - Create S3 bucket (if using S3 mode)
 
-1. 添加Web界面支持
-2. 优化向量索引性能
-3. 添加批量处理功能
-4. 支持更多图片格式
-5. 添加图片预处理选项
+2. Configure deployment:
+   - Copy SSH key to ~/.ssh/
+   - Configure .env file
+
+3. Deploy:
+```bash
+bash deploy/deploy.sh
+```
+
+## Project Structure
+
+```
+mobileClip-Search/
+├── app.py                 # Main application file
+├── requirements.txt       # Python dependencies
+├── templates/            # HTML templates
+│   └── index.html        # Main page
+├── checkpoints/          # Model directory
+│   └── mobileclip_s0.pt  # mobileClip-Search model
+├── images/              # Image library directory
+├── cache/               # Cache directory
+├── deploy/              # Deployment files
+│   ├── deploy.sh        # Deployment script
+│   ├── Dockerfile       # Docker configuration
+│   └── docker-compose.yml # Docker Compose configuration
+└── scripts/             # Utility scripts
+    └── logs.sh          # Log viewing script
+```
+
+## Environment Configuration
+
+Configure the following variables in your `.env` file:
+
+```env
+# AWS Credentials
+AWS_ACCESS_KEY_ID=your_access_key_id
+AWS_SECRET_ACCESS_KEY=your_secret_access_key
+AWS_DEFAULT_REGION=ap-southeast-2
+S3_BUCKET=your-bucket-name
+
+# EC2 Configuration
+EC2_IP=your.ec2.ip.address
+EC2_KEY=path/to/your/key.pem
+
+# Application Configuration
+STORAGE_TYPE=s3  # or 'local'
+FLASK_ENV=production
+```
+
+## Usage Guide
+
+1. **Text Search**:
+   - Enter descriptive text in the search box
+   - Click the "Search" button
+   - View the most relevant images
+
+2. **Image Search**:
+   - Click the "Upload Image" button
+   - Select an image file
+   - View similar images
+
+## Maintenance and Monitoring
+
+### View Logs
+```bash
+# View real-time logs
+bash scripts/logs.sh -f
+
+# View last 100 lines
+bash scripts/logs.sh -n 100
+
+# View logs with timestamps
+bash scripts/logs.sh -t
+```
+
+### Update Deployment
+```bash
+# Update application
+bash deploy/deploy.sh
+```

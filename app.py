@@ -13,24 +13,24 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-# 存储配置
-STORAGE_TYPE = os.getenv('STORAGE_TYPE', 'local')  # 默认使用本地存储，可选 'local' 或 's3'
-IMAGE_LIBRARY_DIR = 'images'  # 本地图片目录
+# Storage configuration
+STORAGE_TYPE = os.getenv('STORAGE_TYPE', 'local')  # Default to local storage, options: 'local' or 's3'
+IMAGE_LIBRARY_DIR = 'images'  # Local image directory
 os.makedirs(IMAGE_LIBRARY_DIR, exist_ok=True)
 
-# S3 配置（仅在使用 S3 时初始化）
+# S3 configuration (only initialized when using S3)
 if STORAGE_TYPE == 's3':
     import boto3
     from botocore.exceptions import ClientError
     
-    # 获取 AWS 配置
+    # Get AWS configuration
     S3_BUCKET = os.getenv('S3_BUCKET', 'qf-clip-images')
-    AWS_REGION = os.getenv('AWS_REGION', 'ap-southeast-2')  # 默认使用悉尼区域
+    AWS_REGION = os.getenv('AWS_DEFAULT_REGION', 'ap-southeast-2')
     
     try:
         print(f"Initializing S3 client with region: {AWS_REGION}")
         s3_client = boto3.client('s3', region_name=AWS_REGION)
-        # 测试连接
+        # Test connection
         s3_client.list_buckets()
         print("Successfully connected to S3")
     except Exception as e:
@@ -38,7 +38,7 @@ if STORAGE_TYPE == 's3':
         print("Falling back to local storage")
         STORAGE_TYPE = 'local'
 
-# 加载模型
+# Load model
 model, _, preprocess = mobileclip.create_model_and_transforms('mobileclip_s0', pretrained='checkpoints/mobileclip_s0.pt')
 tokenizer = mobileclip.get_tokenizer('mobileclip_s0')
 model.eval()
@@ -50,18 +50,18 @@ class ImageLibrary:
         self.index = None
         self.feature_cache_file = 'cache/feature_vectors.pkl'
         self.image_hash_file = 'cache/image_hashes.pkl'
-        self.processed_files = {}  # 使用字典存储文件名到索引的映射
+        self.processed_files = {}  # Dictionary mapping filenames to indices
         self.load_cache()
     
     def load_cache(self):
-        """加载缓存的特征向量"""
+        """Load cached feature vectors"""
         if os.path.exists(self.feature_cache_file):
             try:
                 with open(self.feature_cache_file, 'rb') as f:
                     cache_data = pickle.load(f)
                     self.image_paths = cache_data.get('paths', [])
                     self.image_features = cache_data.get('features', [])
-                    # 重建处理文件的映射
+                    # Rebuild processed files mapping
                     self.processed_files = {
                         os.path.basename(path): idx 
                         for idx, path in enumerate(self.image_paths)
@@ -76,7 +76,7 @@ class ImageLibrary:
                 self.processed_files = {}
     
     def save_cache(self):
-        """保存特征向量到缓存"""
+        """Save feature vectors to cache"""
         try:
             os.makedirs('cache', exist_ok=True)
             cache_data = {
@@ -90,15 +90,15 @@ class ImageLibrary:
             print(f"Error saving cache: {e}")
     
     def add_image(self, image_path, feature_vector):
-        """添加新图片到库中，如果已存在则跳过"""
+        """Add new image to library, skip if already exists"""
         filename = os.path.basename(image_path)
         
         if filename in self.processed_files:
-            # 如果文件已存在，直接跳过
+            # Skip if file already exists
             print(f"Skipping existing file: {filename}")
             return False
         
-        # 添加新文件
+        # Add new file
         idx = len(self.image_paths)
         self.image_paths.append(image_path)
         self.image_features.append(feature_vector)
@@ -107,14 +107,14 @@ class ImageLibrary:
         return True
     
     def build_index(self):
-        """构建FAISS索引"""
+        """Build FAISS index"""
         if not self.image_features:
             print("No features to build index")
             return
         try:
             features = np.array(self.image_features)
-            d = features.shape[1]  # 向量维度
-            self.index = faiss.IndexFlatIP(d)  # 使用内积相似度
+            d = features.shape[1]  # Vector dimension
+            self.index = faiss.IndexFlatIP(d)  # Use inner product similarity
             self.index.add(features)
             print(f"Built index with {len(self.image_features)} vectors")
         except Exception as e:
@@ -122,7 +122,7 @@ class ImageLibrary:
             self.index = None
     
     def search(self, query_vector, k=3, threshold=0.2):
-        """搜索相似图片"""
+        """Search for similar images"""
         if not self.image_features:
             print("No images in library")
             return []
@@ -136,7 +136,7 @@ class ImageLibrary:
         try:
             scores, indices = self.index.search(query_vector.reshape(1, -1), k)
             
-            # 只返回相似度大于阈值的结果
+            # Only return results above threshold
             filtered_results = [
                 (self.image_paths[idx], score)
                 for idx, score in zip(indices[0], scores[0])
@@ -150,27 +150,27 @@ class ImageLibrary:
             return []
 
     def get_image_hash(self, img_path):
-        """获取图片的修改时间和大小作为简单的哈希"""
+        """Get image modification time and size as simple hash"""
         stat = os.stat(img_path)
         return f"{stat.st_mtime}_{stat.st_size}"
 
     def load_image_hashes(self):
-        """加载已处理图片的哈希值"""
+        """Load processed image hashes"""
         if os.path.exists(self.image_hash_file):
             with open(self.image_hash_file, 'rb') as f:
                 return pickle.load(f)
         return {}
 
     def save_image_hashes(self, hashes):
-        """保存图片哈希值"""
+        """Save image hashes"""
         with open(self.image_hash_file, 'wb') as f:
             pickle.dump(hashes, f)
 
-# 创建图片库实例
+# Create image library instance
 image_library = ImageLibrary()
 
 def process_image(image):
-    """处理图片并返回特征向量"""
+    """Process image and return feature vector"""
     img_tensor = preprocess(image.convert('RGB')).unsqueeze(0)
     with torch.no_grad():
         features = model.encode_image(img_tensor)
@@ -178,7 +178,7 @@ def process_image(image):
     return features.cpu().numpy()[0]
 
 def process_text(text):
-    """处理文本并返回特征向量"""
+    """Process text and return feature vector"""
     text_token = tokenizer([text])
     with torch.no_grad():
         features = model.encode_text(text_token)
@@ -186,7 +186,7 @@ def process_text(text):
     return features.cpu().numpy()[0]
 
 def upload_to_s3(file_path, bucket, object_name=None):
-    """上传文件到 S3（仅在 S3 模式下使用）"""
+    """Upload file to S3 (only used in S3 mode)"""
     if STORAGE_TYPE != 's3':
         return True
     
@@ -201,7 +201,7 @@ def upload_to_s3(file_path, bucket, object_name=None):
         return False
 
 def download_from_s3(bucket, object_name, file_path):
-    """从 S3 下载文件（仅在 S3 模式下使用）"""
+    """Download file from S3 (only used in S3 mode)"""
     if STORAGE_TYPE != 's3':
         return True
     
@@ -213,7 +213,7 @@ def download_from_s3(bucket, object_name, file_path):
         return False
 
 def get_s3_presigned_url(object_name, expiration=3600):
-    """获取 S3 对象的预签名 URL"""
+    """Get presigned URL for S3 object"""
     try:
         url = s3_client.generate_presigned_url('get_object',
                                             Params={'Bucket': S3_BUCKET,
@@ -225,7 +225,7 @@ def get_s3_presigned_url(object_name, expiration=3600):
         return None
 
 def build_image_library():
-    """构建图片库（支持本地和 S3 模式）"""
+    """Build image library (supports both local and S3 modes)"""
     print("\n=== Starting Image Library Build ===")
     new_images_added = False
     current_hashes = {}
@@ -238,24 +238,24 @@ def build_image_library():
                 for obj in page.get('Contents', []):
                     filename = obj['Key']
                     if any(filename.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png']):
-                        # 检查文件是否已处理
+                        # Check if file is already processed
                         if filename in image_library.processed_files:
                             print(f"Skipping existing file: {filename}")
                             continue
                         
                         try:
-                            # 直接从 S3 读取图片数据
+                            # Read image data directly from S3
                             print(f"Processing new image: {filename}")
                             response = s3_client.get_object(Bucket=S3_BUCKET, Key=filename)
                             image_data = response['Body'].read()
                             image = Image.open(io.BytesIO(image_data))
                             
-                            # 处理图片并添加到库中
+                            # Process image and add to library
                             features = process_image(image)
-                            if image_library.add_image(filename, features):  # 直接使用 S3 key 作为路径
+                            if image_library.add_image(filename, features):  # Use S3 key as path
                                 new_images_added = True
                             
-                            # 使用 S3 对象的元数据作为哈希
+                            # Use S3 object metadata as hash
                             current_hashes[filename] = f"{obj['LastModified']}_{obj['Size']}"
                             
                         except Exception as e:
@@ -264,14 +264,14 @@ def build_image_library():
         except Exception as e:
             print(f"Error accessing S3: {e}")
     else:
-        # 本地模式
+        # Local mode
         print(f"\nScanning directory: {IMAGE_LIBRARY_DIR}")
         for ext in ['*.jpg', '*.jpeg', '*.png']:
             for img_path in Path(IMAGE_LIBRARY_DIR).glob(ext):
                 filename = os.path.basename(img_path)
                 img_path_str = str(img_path)
                 
-                # 检查文件是否已处理
+                # Check if file is already processed
                 if filename in image_library.processed_files:
                     print(f"Skipping existing file: {filename}")
                     continue
@@ -299,7 +299,7 @@ def build_image_library():
     print(f"\nTotal images in library: {len(image_library.image_paths)}")
     print("=== Image Library Build Completed ===\n")
 
-# 在全局范围内构建图片库
+# Build image library in global scope
 print("Initializing image library...")
 build_image_library()
 print("Image library initialization completed!")
@@ -315,11 +315,11 @@ def search_text():
         if not text:
             return jsonify({'error': 'No text provided'}), 400
 
-        # 处理文本查询
+        # Process text query
         text_features = process_text(text)
         results = image_library.search(text_features)
         
-        # 格式化结果
+        # Format results
         formatted_results = [
             {'image': os.path.basename(path), 'score': float(score)}
             for path, score in results
@@ -339,15 +339,15 @@ def search_image():
         if file.filename == '':
             return jsonify({'error': 'No image selected'}), 400
 
-        # 读取和处理上传的图片
+        # Read and process uploaded image
         image_bytes = file.read()
         image = Image.open(io.BytesIO(image_bytes))
         image_features = process_image(image)
         
-        # 搜索相似图片
+        # Search for similar images
         results = image_library.search(image_features)
         
-        # 格式化结果
+        # Format results
         formatted_results = [
             {'image': os.path.basename(path), 'score': float(score)}
             for path, score in results
@@ -360,18 +360,18 @@ def search_image():
 @app.route('/images/<path:filename>')
 def serve_image(filename):
     try:
-        # 确保文件名不包含路径分隔符
+        # Ensure filename does not contain path separators
         filename = os.path.basename(filename)
         
         if STORAGE_TYPE == 's3':
-            # S3 模式：生成预签名 URL
+            # S3 mode: Generate presigned URL
             url = get_s3_presigned_url(filename)
             if url:
                 return redirect(url)
             else:
                 return "Failed to generate S3 URL", 500
         else:
-            # 本地模式：直接从文件系统提供图片
+            # Local mode: Serve image directly from file system
             full_path = os.path.join(os.path.abspath(IMAGE_LIBRARY_DIR), filename)
             print(f"Attempting to serve image: {full_path}")
             
@@ -395,14 +395,14 @@ def serve_image(filename):
         print(f"Error serving image {filename}: {str(e)}")
         return f"Error serving image: {str(e)}", 500
 
-# 添加一个路由来检查图片是否存在
+# Add a route to check if image exists
 @app.route('/check_image/<path:filename>')
 def check_image(filename):
     try:
         filename = os.path.basename(filename)
         if STORAGE_TYPE == 's3':
             try:
-                # 检查文件是否存在于 S3
+                # Check if file exists in S3
                 s3_client.head_object(Bucket=S3_BUCKET, Key=filename)
                 return jsonify({
                     'exists': True,
@@ -414,7 +414,7 @@ def check_image(filename):
                     'filename': filename
                 })
         else:
-            # 本地模式
+            # Local mode
             full_path = os.path.join(IMAGE_LIBRARY_DIR, filename)
             exists = os.path.isfile(full_path)
             return jsonify({
@@ -428,8 +428,8 @@ def check_image(filename):
         }), 500
 
 if __name__ == '__main__':
-    # 确保缓存目录存在
+    # Ensure cache directory exists
     os.makedirs('cache', exist_ok=True)
     
-    # 启动Flask应用
+    # Start Flask application
     app.run(debug=True, host='0.0.0.0', port=5000) 
