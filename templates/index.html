@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Search Tool</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .result-image {
+            width: 200px;
+            height: 200px;
+            object-fit: cover;
+            margin: 10px;
+        }
+        .result-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .result-item {
+            text-align: center;
+            margin: 10px;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center mb-4">Image Search Tool</h1>
+        
+        <!-- Search By Text -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Search By Text</h5>
+            </div>
+            <div class="card-body">
+                <form id="textSearchForm" class="mb-3">
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="searchText" placeholder="Enter Text Keyword...">
+                        <button class="btn btn-primary" type="submit">Search</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Search By Image -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Search By Image</h5>
+            </div>
+            <div class="card-body">
+                <form id="imageSearchForm" class="mb-3">
+                    <div class="mb-3">
+                        <input type="file" class="form-control" id="searchImage" accept="image/*">
+                    </div>
+                    <button class="btn btn-primary" type="submit">Search</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 加载动画 -->
+        <div id="loading" class="loading">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Search...</p>
+        </div>
+
+        <!-- Search结果 -->
+        <div id="results" class="result-container"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Search By Text
+        document.getElementById('textSearchForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const text = document.getElementById('searchText').value;
+            if (!text) return;
+
+            showLoading();
+            try {
+                const response = await fetch('/search_text', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ text }),
+                });
+                const results = await response.json();
+                displayResults(results);
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Search Error, Please Try Again');
+            }
+            hideLoading();
+        });
+
+        // Search By Image
+        document.getElementById('imageSearchForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const file = document.getElementById('searchImage').files[0];
+            if (!file) return;
+
+            showLoading();
+            try {
+                const formData = new FormData();
+                formData.append('image', file);
+
+                const response = await fetch('/search_image', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const results = await response.json();
+                displayResults(results);
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Search Error, Please Try Again');
+            }
+            hideLoading();
+        });
+
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').innerHTML = '';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function displayResults(results) {
+            const container = document.getElementById('results');
+            container.innerHTML = '';
+            
+            results.forEach(result => {
+                const div = document.createElement('div');
+                div.className = 'result-item';
+                
+                // 创建图片元素
+                const img = document.createElement('img');
+                img.className = 'result-image';
+                img.alt = 'Search Result';
+                
+                // 直接设置图片源
+                img.src = `/images/${result.image}`;
+                
+                // 添加错误处理
+                img.onerror = function() {
+                    console.error(`Failed to load image: ${result.image}`);
+                    this.src = 'https://via.placeholder.com/200x200?text=Image+Load+Error';
+                };
+                
+                const score = document.createElement('p');
+                score.textContent = `Similarity Score: ${(result.score * 100).toFixed(2)}%`;
+                
+                div.appendChild(img);
+                div.appendChild(score);
+                container.appendChild(div);
+            });
+        }
+    </script>
+</body>
+</html> 

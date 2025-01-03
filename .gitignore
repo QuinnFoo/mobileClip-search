@@ -1,0 +1,35 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+
+# Deployment
+deploy_tmp/
+
+# Application specific
+images/*
+!images/.gitkeep
+cache/*
+!cache/.gitkeep
+*.log
+
+# AWS
+.aws/
+*.pem
+
+# Model checkpoints
+checkpoints/*
+!checkpoints/.gitkeep 

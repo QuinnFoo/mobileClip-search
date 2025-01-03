@@ -1,0 +1,16 @@
+version: '3'
+services:
+  web:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./images:/app/images
+      - ./cache:/app/cache
+      - ./checkpoints:/app/checkpoints:ro
+    environment:
+      - FLASK_ENV=development
+      - STORAGE_TYPE=local
+      - PYTHONUNBUFFERED=1
+    user: "${UID:-1000}:${GID:-1000}"
+    restart: always 
